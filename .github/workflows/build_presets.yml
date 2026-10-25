@@ -64,5 +64,5 @@ jobs:
       if: ${{ github.event_name != 'pull_request' && github.event.action != 'unassigned' }}
       uses: actions/upload-artifact@master
       with:
-        name: sphaira-${{ matrix.preset }}
+        name: ns-eshop-client-${{ matrix.preset }}
         path: build/${{ matrix.preset }}/sphaira.nro

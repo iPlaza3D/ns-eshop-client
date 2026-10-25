@@ -716,7 +716,7 @@ target_compile_options(sphaira PRIVATE
 nx_generate_nacp(
     OUTPUT sphaira.nacp
     NAME "NS eShop Client"
-    AUTHOR TotalJustice
+    AUTHOR iPlaza3D
     VERSION ${sphaira_VERSION}
 )
 

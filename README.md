@@ -1,10 +1,10 @@
-# Sphaira
+# NS eShop Client
 
-A homebrew menu for the Nintendo Switch.
+An experimental Nintendo Switch homebrew client for self-hosted NS eShop servers.
 
-[See the GBATemp thread for more details / discussion](https://gbatemp.net/threads/sphaira-hbmenu-replacement.664523/).
+This community project is derived from the Sphaira codebase and is intended for testing and development. It is not an official Nintendo product and does not connect to Nintendo's servers.
 
-[We have now have a Discord server!](https://discord.gg/pBybbdasfQ) Please use the issues tab to report bugs, as it is much easier for me to track.
+Please use the [issues tab](https://github.com/iPlaza3D/ns-eshop-client/issues) to report bugs and suggest improvements.
 
 ## Showcase
 
@@ -38,7 +38,7 @@ MTP can be enabled via the Network menu.
 
 ## File association
 
-Sphaira has file association support. Let's say your app supports loading .png files, then you could write an association file, then when using the file browser, clicking on a .png file will launch your app along with the .png file as argv[1]. This was primarly added for rom loading support for emulators / frontends such as RetroArch, MelonDS, mGBA etc.
+NS eShop Client has file association support. Let's say your app supports loading .png files, then you could write an association file, then when using the file browser, clicking on a .png file will launch your app along with the .png file as argv[1]. This was primarly added for rom loading support for emulators / frontends such as RetroArch, MelonDS, mGBA etc.
 
 ```ini
 path=/switch/your_app.nro
@@ -51,13 +51,13 @@ See `assets/romfs/assoc/` for more examples of file assoc entries.
 
 ## Installing (applications)
 
-Sphaira can install applications and mod packages (nsp, xci, nsz, xcz, msp) from various sources (sd card, gamecard, ftp, usb).
+NS eShop Client can install applications and mod packages (nsp, xci, nsz, xcz, msp) from various sources (sd card, gamecard, ftp, usb).
 
-For informantion about the install options, [see the wiki](https://github.com/ITotalJustice/sphaira/wiki/Install).
+For information about the install options, [see the project wiki](https://github.com/iPlaza3D/ns-eshop-client/wiki).
 
 ### Usb (install)
 
-The USB protocol is the same as tinfoil, so tools such as [ns-usbloader](https://github.com/developersu/ns-usbloader) and [fluffy](https://github.com/fourminute/Fluffy) should work with sphaira. You may also use the provided python script found [here](tools/usb_install_pc.py).
+The USB protocol is the same as tinfoil, so tools such as [ns-usbloader](https://github.com/developersu/ns-usbloader) and [fluffy](https://github.com/fourminute/Fluffy) should work with NS eShop Client. You may also use the provided python script found [here](tools/usb_install_pc.py).
 
 ### Ftp (install)
 
@@ -74,19 +74,19 @@ EXT2/3/4 is supported as well but off by default, enable it with `-DENABLE_EXT4=
 
 A few NTFS notes:
 
-- Always eject the drive properly on Windows. If the journal is left dirty, sphaira replays it on mount, but only
+- Always eject the drive properly on Windows. If the journal is left dirty, the client replays it on mount, but only
   when `HDD write protect` is off.
 - A drive left behind by Windows fast startup / hibernation is not mounted by default. `Mount hibernated NTFS`
   in the HDD options forces it, at the cost of the saved Windows session.
 - NTFS is noticeably slower than exFAT. For installing large files, exFAT is the better choice.
 
-### Nintendo eShop / Ownfoil (install)
+### NS eShop server (install)
 
-[iplaza3d/ns-eshop-server](https://github.com/iplaza3d/ns-eshop-server) is the self-hosted Nintendo Switch library manager used by Sphaira's Nintendo eShop view. It is an Ownfoil fork that exposes the GraphQL catalog, artwork and downloadable content needed by the console client.
+[iplaza3d/ns-eshop-server](https://github.com/iplaza3d/ns-eshop-server) provides the self-hosted Nintendo Switch library manager used by this experimental client. It exposes the GraphQL catalog, artwork and downloadable content needed by the console client.
 
 Local servers are found automatically on the network, so there is no ip or port to type in. Each server can have both a local and a remote address, over http or https, and signs in with a user account.
 
-The library is browsed by *content*, not by files: pick a game, a version and the dlc you want, and Sphaira works out which files it needs, however they are bundled (several nsp, or a multi content nsp / xci).  
+The library is browsed by *content*, not by files: pick a game, a version and the dlc you want, and the client works out which files it needs, however they are bundled (several nsp, or a multi content nsp / xci).  
 Only what you picked is downloaded and installed. nsp, nsz, xci and xcz are supported, and a download survives a broken connection, resuming for up to 60s.
 
 Entries are listed under `New games`, `Updates`, `DLC`, `All games` and `Search`, paginated and sortable. All artwork is served by the configured server, so the Switch never connects to Nintendo's servers.  
@@ -105,16 +105,16 @@ For EXT2/3/4 support (`-DENABLE_EXT4=ON`) you also need `switch-lwext4`.
 
 Also you need to have on your environment the packages `git`, `make`, `zip` and `cmake`
 
-Once devkitPro and all dependencies are installed, you can now build sphaira.
+Once devkitPro and all dependencies are installed, you can now build NS eShop Client.
 
 ```sh
-git clone https://github.com/ITotalJustice/sphaira.git
-cd sphaira
+git clone https://github.com/iPlaza3D/ns-eshop-client.git
+cd ns-eshop-client
 cmake --preset MinSizeRel
 cmake --build --preset MinSizeRel
 ```
 
-The output will be found in `build/MinSizeRel/sphaira.nro`
+The output will be found in `build/MinSizeRel/sphaira.nro`. The internal filename remains `sphaira.nro` for compatibility with the existing Switch homebrew tooling.
 
 ### Using Docker
 
@@ -132,6 +132,8 @@ The first build takes longer but after that only what you changed is compiled.
 The output will be found in `build/<preset>/sphaira.nro`. Add `--send` to send it straight to the console over `nxlink` (enable it in the Network options) and follow its log.
 
 ## Credits
+
+This project uses the Sphaira codebase as its starting point. Please refer to the original [Sphaira project](https://github.com/ITotalJustice/sphaira) for its history and upstream credits.
 
 - [borealis](https://github.com/natinusala/borealis)
 - [stb](https://github.com/nothings/stb)
