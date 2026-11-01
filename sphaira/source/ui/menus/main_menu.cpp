@@ -301,6 +301,7 @@ auto MiscMenuFuncGenerator(u32 flags) {
 }
 
 const MiscMenuEntry MISC_MENU_ENTRIES[] = {
+#if 0
     { .name = "Homebrew", .title = "Homebrew", .func = MiscMenuFuncGenerator<ui::menu::homebrew::Menu>, .flag = MiscMenuFlag_Shortcut, .info =
         "The homebrew menu.\n\n"
         "Allows you to launch, delete and mount homebrew!"},
@@ -339,11 +340,13 @@ const MiscMenuEntry MISC_MENU_ENTRIES[] = {
     { .name = "GitHub", .title = "GitHub", .func = MiscMenuFuncGenerator<ui::menu::gh::Menu>, .flag = MiscMenuFlag_Shortcut, .info =
         "Download releases directly from GitHub. "
         "Custom entries can be added to /config/sphaira/github" },
+#endif
 
-    { .name = "Ownfoil", .title = "Nintendo eShop", .func = MiscMenuFuncGenerator<ui::menu::ownfoil::Menu>, .flag = MiscMenuFlag_Shortcut, .info =
+    { .name = "NS eShop", .title = "NS eShop", .func = MiscMenuFuncGenerator<ui::menu::ownfoil::Menu>, .flag = MiscMenuFlag_Shortcut, .info =
         "Browse and install titles from a self-hosted Nintendo eShop server.\n\n"
         "Internet connection required." },
 
+#if 0
 #ifdef ENABLE_FTPSRV
     { .name = "FTP", .title = "FTP Install", .func = MiscMenuFuncGenerator<ui::menu::ftp::Menu>, .flag = MiscMenuFlag_Install, .info =
         "Install apps via FTP." },
@@ -366,6 +369,7 @@ const MiscMenuEntry MISC_MENU_ENTRIES[] = {
 
     { .name = "IRS", .title = "IRS (Infrared Joycon Camera)", .func = MiscMenuFuncGenerator<ui::menu::irs::Menu>, .flag = MiscMenuFlag_Shortcut, .info =
         "InfraRed Sensor (IRS) is the small camera found on right JoyCon." },
+#endif
 };
 
 auto InstallUpdate(ProgressBox* pbox, const std::string url, const std::string version) -> Result {
@@ -484,6 +488,7 @@ auto InstallUpdate(ProgressBox* pbox, const std::string url, const std::string v
     R_SUCCEED();
 }
 
+#if 0
 auto CreateCenterMenu(std::string& name_out) -> std::unique_ptr<MenuBase> {
     const auto name = App::GetApp()->m_center_menu.Get();
 
@@ -546,6 +551,7 @@ auto CreateRightSideMenu(std::string_view left_name) -> std::unique_ptr<MenuBase
 
     return std::make_unique<ui::menu::appstore::Menu>(MenuFlag_Tab);
 }
+#endif
 
 } // namespace
 
@@ -554,8 +560,7 @@ auto GetMenuMenuEntries() -> std::span<const MiscMenuEntry> {
 }
 
 MainMenu::MainMenu() {
-    CheckForUpdates(false);
-
+#if 0
     this->SetActions(
         std::make_pair(Button::START, Action{App::Exit}),
         std::make_pair(Button::SELECT, Action{App::DisplayMenuOptions}),
@@ -659,17 +664,16 @@ MainMenu::MainMenu() {
             }, true, "Check for Sphaira updates and view the changelog."_i18n);
         }}
     ));
+#endif
 
-    std::string center_name;
-    m_centre_menu = CreateCenterMenu(center_name);
+    // This build is a dedicated NS eShop client: the server menu is the only
+    // application surface and START remains available to leave it.
+    this->SetActions(
+        std::make_pair(Button::START, Action{App::Exit})
+    );
+
+    m_centre_menu = std::make_unique<ui::menu::ownfoil::Menu>(MenuFlag_Tab);
     m_current_menu = m_centre_menu.get();
-
-    std::string left_side_name;
-    m_left_menu = CreateLeftSideMenu(center_name, left_side_name);
-
-    m_right_menu = CreateRightSideMenu(left_side_name);
-
-    AddOnLRPress();
 
     for (auto [button, action] : m_actions) {
         m_current_menu->SetAction(button, action);
@@ -858,6 +862,7 @@ void MainMenu::OnFocusLost() {
     m_current_menu->OnFocusLost();
 }
 
+#if 0
 void MainMenu::OnLRPress(MenuBase* menu, Button b) {
     m_current_menu->OnFocusLost();
     if (m_current_menu == m_centre_menu.get()) {
@@ -890,5 +895,6 @@ void MainMenu::AddOnLRPress() {
         }});
     }
 }
+#endif
 
 } // namespace sphaira::ui::menu::main

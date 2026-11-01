@@ -10,9 +10,15 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <mutex>
 
 namespace sphaira::ownfoil::installed {
 namespace {
+
+// libnx's title/ns services are process-global. Category changes can leave an
+// abandoned worker alive while the next one starts, so serialize every access
+// to those services instead of allowing two workers to open/close them at once.
+std::mutex g_title_service_mutex;
 
 // the shop stores ids uppercase and matches case-sensitively.
 auto FormatId(u64 id) -> std::string {
@@ -28,6 +34,7 @@ auto ParseId(const std::string& id) -> u64 {
 } // namespace
 
 auto Scan(bool content) -> Inventory {
+    std::scoped_lock service_lock{g_title_service_mutex};
     Inventory out{};
 
     // ns is only open while the games or saves menu exists, and nothing in the
@@ -83,6 +90,7 @@ auto TitleIds(const Inventory& inv) -> std::vector<std::string> {
 }
 
 auto InstalledVersionOf(const std::string& title_id) -> InstalledVersion {
+    std::scoped_lock service_lock{g_title_service_mutex};
     InstalledVersion out{};
 
     // opened for the query, as Scan does.
@@ -131,6 +139,7 @@ auto InstalledVersionOf(const std::string& title_id) -> InstalledVersion {
 }
 
 auto HasDlc(const std::string& title_id, const std::string& dlc_id) -> bool {
+    std::scoped_lock service_lock{g_title_service_mutex};
     // opened for the query, as Scan does.
     if (R_FAILED(ns::Initialize())) {
         return false;
@@ -149,6 +158,7 @@ auto HasDlc(const std::string& title_id, const std::string& dlc_id) -> bool {
 }
 
 auto InstalledDlcIds(const std::string& title_id) -> std::vector<std::string> {
+    std::scoped_lock service_lock{g_title_service_mutex};
     std::vector<std::string> out;
 
     // opened for the query, as Scan does.

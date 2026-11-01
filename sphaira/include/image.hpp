@@ -16,6 +16,8 @@ enum ImageFlag {
     ImageFlag_None = 0,
     // set this if the image is a jpeg, will use oss-nvjpg to load.
     ImageFlag_JPEG = 1 << 0,
+    // artwork received from a shop is untrusted; reject oversized images before decoding.
+    ImageFlag_Artwork = 1 << 1,
 };
 
 auto ImageLoadFromMemory(std::span<const u8> data, u32 flags = ImageFlag_None) -> ImageResult;

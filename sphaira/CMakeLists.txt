@@ -14,8 +14,10 @@ option(ENABLE_NTFS "enables NTFS hdd mounting, requires switch-ntfs-3g" ON)
 # needs the portlib: (dkp-)pacman -S switch-lwext4
 option(ENABLE_EXT4 "enables EXT2/3/4 hdd mounting, requires switch-lwext4" OFF)
 option(ENABLE_LIBUSBDVD "enables cd/dvd/iso/cue mounting" ON)
-option(ENABLE_FTPSRV "enables MTP server support" ON)
-option(ENABLE_LIBHAZE "enables MTP server support" ON)
+# The client only talks to NS eShop servers; the original Sphaira FTP/MTP
+# services are intentionally disabled for this focused build.
+option(ENABLE_FTPSRV "enables the legacy FTP server" OFF)
+option(ENABLE_LIBHAZE "enables the legacy MTP server" OFF)
 
 # audio options.
 option(ENABLE_AUDIO_MP3 "" ON)
@@ -400,7 +402,7 @@ if (ENABLE_FTPSRV)
         GIT_REPOSITORY https://github.com/ITotalJustice/ftpsrv.git
         GIT_TAG 7c82402
         SOURCE_SUBDIR NONE
-        PATCH_COMMAND "${GIT_EXECUTABLE}" apply --ignore-whitespace "${CMAKE_SOURCE_DIR}/cmake/patches/ftpsrv-upload-callback.patch"
+        PATCH_COMMAND "${GIT_EXECUTABLE}" apply --ignore-whitespace "${CMAKE_SOURCE_DIR}/cmake/patches/ftpsrv-upload-callback.patch" || "${GIT_EXECUTABLE}" apply --reverse --check --ignore-whitespace "${CMAKE_SOURCE_DIR}/cmake/patches/ftpsrv-upload-callback.patch"
     )
 
     FetchContent_MakeAvailable(ftpsrv)
@@ -624,6 +626,24 @@ FetchContent_MakeAvailable(
     dr_libs
 )
 
+# libnxtc's current source names the compressed title block fields introduced
+# by newer libnx headers.  The project deliberately supports older libnx too,
+# so access the stable on-disk offsets instead of requiring those field names.
+file(READ ${libnxtc_SOURCE_DIR}/source/nxtc.c libnxtc_source)
+string(REPLACE
+    "memcpy(out, nacp->lang_data.lang, sizeof(nacp->lang_data.lang));"
+    "memcpy(out, (const u8*)nacp, 0x3000);"
+    libnxtc_source "${libnxtc_source}")
+string(REPLACE
+    "const u16 compressed_blob_size = nacp->lang_data.compressed_data.buffer_size;\n    const u8 *compressed_blob = (const u8*)nacp->lang_data.compressed_data.buffer;"
+    "u16 compressed_blob_size = 0;\n    memcpy(&compressed_blob_size, (const u8*)nacp + 0x3000, sizeof(compressed_blob_size));\n    const u8 *compressed_blob = (const u8*)nacp + 0x3002;"
+    libnxtc_source "${libnxtc_source}")
+string(REPLACE
+    "u16 compressed_blob_size{};"
+    "u16 compressed_blob_size = 0;"
+    libnxtc_source "${libnxtc_source}")
+file(WRITE ${libnxtc_SOURCE_DIR}/source/nxtc.c "${libnxtc_source}")
+
 add_library(stb INTERFACE)
 target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
 
@@ -714,7 +734,7 @@ target_compile_options(sphaira PRIVATE
 
 # create nacp
 nx_generate_nacp(
-    OUTPUT sphaira.nacp
+    OUTPUT ns-eshop-client.nacp
     NAME "NS eShop Client"
     AUTHOR iPlaza3D
     VERSION ${sphaira_VERSION}
@@ -722,20 +742,20 @@ nx_generate_nacp(
 
 # create nro
 nx_create_nro(sphaira
-    OUTPUT ${CMAKE_BINARY_DIR}/sphaira.nro
+    OUTPUT ${CMAKE_BINARY_DIR}/ns-eshop-client.nro
     ICON ${CMAKE_SOURCE_DIR}/assets/icon.jpg
-    NACP sphaira.nacp
+    NACP ns-eshop-client.nacp
     ROMFS sphaira_romfs
 )
 
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/switch/sphaira)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/switch/ns-eshop-client)
 
 add_custom_command(
     TARGET sphaira_nro POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
-        ${CMAKE_BINARY_DIR}/sphaira.nro
-        ${CMAKE_BINARY_DIR}/switch/sphaira/sphaira.nro
+        ${CMAKE_BINARY_DIR}/ns-eshop-client.nro
+        ${CMAKE_BINARY_DIR}/switch/ns-eshop-client/ns-eshop-client.nro
 )
 
-message(STATUS "generating nro in: ${CMAKE_BINARY_DIR}/sphaira.nro")
-message(STATUS "run nxlink -s ${CMAKE_BINARY_DIR}/sphaira.nro")
+message(STATUS "generating nro in: ${CMAKE_BINARY_DIR}/ns-eshop-client.nro")
+message(STATUS "run nxlink -s ${CMAKE_BINARY_DIR}/ns-eshop-client.nro")

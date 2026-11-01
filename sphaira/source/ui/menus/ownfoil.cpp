@@ -6,9 +6,7 @@
 #include "ui/progress_box.hpp"
 
 #include "app.hpp"
-#include "image.hpp"
 #include "swkbd.hpp"
-#include "download.hpp"
 #include "fs.hpp"
 #include "defines.hpp"
 #include "evman.hpp"
@@ -32,13 +30,6 @@ constexpr Vec4 LIST_POS{30.f, 87.f, 1190.f, 425.f};
 constexpr Vec4 LIST_ITEM{75.f, 110.f, 1130.f, 90.f};
 constexpr Vec2 LIST_PAD{0.f, 12.f};
 constexpr Vec4 DISCOVER_BUTTON{75.f, 530.f, 1130.f, 60.f};
-
-// the banner view has no equivalent in grid::Menu, so it lays itself out, in
-// the shape themezer uses for its pack cards.
-constexpr Vec4 BANNER_ITEM{75.f, 110.f, 350.f, 250.f};
-constexpr Vec2 BANNER_PAD{10.f, 10.f};
-constexpr float BANNER_W = 320.f;
-constexpr float BANNER_H = 180.f;
 
 // every page is a round trip and a screenful of artwork, so the choices stay
 // modest at the low end.
@@ -81,12 +72,6 @@ constexpr CategoryMode CATEGORIES[] = {
     {sphaira::ownfoil::api::Category::Search, "Search"},
 };
 
-// looked up once: the '-' action is re-asserted every frame the catalog is up.
-auto GetViewActionHint() -> const std::string& {
-    static const std::string hint = "View"_i18n;
-    return hint;
-}
-
 // and Y, for the same reason.
 auto GetCategoryActionHint() -> const std::string& {
     static const std::string hint = "Show"_i18n;
@@ -95,25 +80,7 @@ auto GetCategoryActionHint() -> const std::string& {
 
 } // namespace
 
-Menu::LazyImage::LazyImage(LazyImage&& rhs) noexcept {
-    *this = std::move(rhs);
-}
-
-auto Menu::LazyImage::operator=(LazyImage&& rhs) noexcept -> LazyImage& {
-    std::swap(image, rhs.image);
-    std::swap(tried_cache, rhs.tried_cache);
-    std::swap(cached, rhs.cached);
-    std::swap(state, rhs.state);
-    return *this;
-}
-
-Menu::LazyImage::~LazyImage() {
-    if (image) {
-        nvgDeleteImage(App::GetVg(), image);
-    }
-}
-
-Menu::Menu(u32 flags) : grid::Menu{"Nintendo eShop"_i18n, flags} {
+Menu::Menu(u32 flags) : grid::Menu{"NS eShop"_i18n, flags} {
     // B leaves the menu from the catalog too: the server list is reached from
     // the catalog's options, not by backing out.
     SetAction(Button::B, Action{"Back"_i18n, [this]{
@@ -152,10 +119,6 @@ Menu::Menu(u32 flags) : grid::Menu{"Nintendo eShop"_i18n, flags} {
 
     m_list = std::make_unique<List>(1, 4, LIST_POS, LIST_ITEM, LIST_PAD);
 
-    if (m_view.Get() < 0 || m_view.Get() >= ViewType_Count) {
-        m_view.Set(ViewType_Icon);
-    }
-
     // a hand-edited ini must not leave the sidebar pointing past the list, nor
     // BuildQuery indexing past SORT_MODES.
     if (m_sort.Get() < 0 || m_sort.Get() >= static_cast<s64>(std::size(SORT_MODES))) {
@@ -192,9 +155,6 @@ void Menu::SetMode(Mode mode) {
         SetAction(Button::Y, Action{GetCategoryActionHint(), [this]{
             ShowCategories();
         }});
-        SetAction(Button::SELECT, Action{GetViewActionHint(), [this]{
-            CycleView();
-        }});
         // no hint on ZL: the bar draws it beside ZR, in front of the one hint.
         SetAction(Button::L2, Action{[this]{
             if (m_page > 0) {
@@ -206,7 +166,6 @@ void Menu::SetMode(Mode mode) {
                 LoadPage(m_page + 1);
             }
         }});
-        OnViewChange();
     } else {
         if (was_home) {
             FreeEntries();
@@ -215,11 +174,13 @@ void Menu::SetMode(Mode mode) {
             RestoreAction(Button::Y, m_prev_y);
             RemoveAction(Button::L2);
             RemoveAction(Button::R2);
-            SetTitle("Nintendo eShop"_i18n);
+            SetTitle("NS eShop"_i18n);
             SetTitleSubHeading("");
             SetSubHeading("");
             m_list = std::make_unique<List>(1, 4, LIST_POS, LIST_ITEM, LIST_PAD);
         }
+        SetTitle("NS eShop"_i18n);
+        SetTitleSubHeading("Local and remote servers"_i18n);
     }
 }
 
@@ -250,36 +211,6 @@ void Menu::FreeEntries() {
     m_entry_index = 0;
 }
 
-void Menu::CycleView() {
-    m_view.Set((m_view.Get() + 1) % ViewType_Count);
-    OnViewChange();
-}
-
-void Menu::OnViewChange() {
-    m_entry_index = 0;
-    m_banner_name.Reset();
-    m_banner_publisher.Reset();
-
-    switch (m_view.Get()) {
-        case ViewType_Icon:
-            grid::Menu::OnLayoutChange(m_list, grid::LayoutType_Grid);
-            break;
-
-        case ViewType_Detail:
-            grid::Menu::OnLayoutChange(m_list, grid::LayoutType_GridDetail);
-            break;
-
-        // grid::Menu knows nothing of this one, so it is built here.
-        case ViewType_Banner:
-            m_list = std::make_unique<List>(3, 6, m_pos, BANNER_ITEM, BANNER_PAD);
-            break;
-    }
-
-    // each view hands back a fresh List, which claims L2/R2 to scroll its own
-    // rows - here those are the shop's pages, so the press would do both.
-    m_list->SetPageJump(false);
-}
-
 void Menu::Update(Controller* controller, TouchInfo* touch) {
     // an install changes what the console-crossed categories list, so the page
     // on screen is asked for again.
@@ -294,13 +225,6 @@ void Menu::Update(Controller* controller, TouchInfo* touch) {
     // MainMenu copies its own actions onto the current tab after OnFocusGained,
     // so '-' and Y have to be reclaimed every frame the catalog owns them.
     if (m_mode == Mode::Home) {
-        const auto it = m_actions.find(Button::SELECT);
-        if (it == m_actions.end() || it->second.m_hint != GetViewActionHint()) {
-            SetAction(Button::SELECT, Action{GetViewActionHint(), [this]{
-                CycleView();
-            }});
-        }
-
         const auto y = m_actions.find(Button::Y);
         if (y == m_actions.end() || y->second.m_hint != GetCategoryActionHint()) {
             SetAction(Button::Y, Action{GetCategoryActionHint(), [this]{
@@ -445,138 +369,22 @@ void Menu::Draw(NVGcontext* vg, Theme* theme) {
 
 void Menu::DrawHome(NVGcontext* vg, Theme* theme) {
     if (m_entries.empty()) {
-        gfx::drawTextArgs(vg, SCREEN_WIDTH / 2.f, SCREEN_HEIGHT / 2.f, 30.f, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, theme->GetColour(ThemeEntryID_TEXT_INFO), "%s", "Empty..."_i18n.c_str());
+        const auto category = CATEGORIES[m_category].category;
+        const auto message = category == sphaira::ownfoil::api::Category::Updates
+            ? "No updates are available for the installed games."_i18n
+            : category == sphaira::ownfoil::api::Category::Dlc
+                ? "DLC is shown for games installed on this console."_i18n
+                : "Empty..."_i18n;
+        gfx::drawTextArgs(vg, SCREEN_WIDTH / 2.f, SCREEN_HEIGHT / 2.f, 30.f, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, theme->GetColour(ThemeEntryID_TEXT_INFO), "%s", message.c_str());
         return;
     }
 
-    // capped so a page of fresh artwork doesn't stall the frame on io or gpu.
-    int budget = 2;
-    const auto view = m_view.Get();
-
-    m_list->Draw(vg, theme, m_entries.size(), [this, view, &budget](NVGcontext* vg, Theme* theme, const Vec4& v, s64 index) {
-        const auto& [x, y, w, h] = v;
+    m_list->Draw(vg, theme, m_entries.size(), [this](NVGcontext* vg, Theme* theme, const Vec4& v, s64 index) {
         auto& e = m_entries[index];
         const auto selected = index == m_entry_index;
-
-        if (view == ViewType_Banner) {
-            if (selected) {
-                gfx::drawRectOutline(vg, theme, 4.f, v);
-            } else {
-                DrawElement(v, ThemeEntryID_GRID);
-            }
-
-            const auto text_id = selected ? ThemeEntryID_TEXT_SELECTED : ThemeEntryID_TEXT;
-            const auto info_id = selected ? ThemeEntryID_TEXT_SELECTED : ThemeEntryID_TEXT_INFO;
-            const auto xoff = (BANNER_ITEM.w - BANNER_W) / 2.f;
-            const auto image = GetImage(e, true, budget);
-
-            gfx::drawImage(vg, x + xoff, y, BANNER_W, BANNER_H, image ? image : App::GetDefaultImage(), 5.f);
-            m_banner_name.Draw(vg, selected, x + xoff, y + BANNER_H + 20.f, w - 30.f - xoff, 18.f, NVG_ALIGN_LEFT, theme->GetColour(text_id), e.app.name.c_str());
-            m_banner_publisher.Draw(vg, selected, x + xoff, y + BANNER_H + 55.f, w - 30.f - xoff, 18.f, NVG_ALIGN_LEFT, theme->GetColour(info_id), e.app.publisher.c_str());
-            return;
-        }
-
-        const auto layout = view == ViewType_Detail ? grid::LayoutType_GridDetail : grid::LayoutType_Grid;
-        DrawEntry(vg, theme, layout, v, selected, GetImage(e, false, budget), e.app.name.c_str(), e.app.publisher.c_str(), e.app.version.c_str());
+        DrawEntryNoImage(vg, theme, grid::LayoutType_GridDetail, v, selected,
+            e.app.name.c_str(), e.app.publisher.c_str(), e.app.version.c_str());
     });
-}
-
-auto Menu::GetImage(Entry& e, bool banner, int& budget) -> int {
-    auto& image = banner ? e.banner : e.icon;
-    const auto& src = banner ? e.app.banner : e.app.icon;
-    const auto& url = src.url;
-
-    if (image.image) {
-        return image.image;
-    }
-
-    // a title the catalog has no artwork for is never going to gain any.
-    if (url.empty()) {
-        image.state = ImageState::Failed;
-        return App::GetDefaultImage();
-    }
-
-    if (image.state == ImageState::Failed) {
-        return App::GetDefaultImage();
-    }
-
-    // this runs per visible entry per frame, so bail before hashing a cache path
-    // that won't be used.
-    if (image.state == ImageState::Progress) {
-        return 0;
-    }
-
-    if (budget <= 0) {
-        return 0;
-    }
-
-    const auto path = BuildImageCache(e.app.app_id, url, banner ? "banner" : "icon");
-
-    const auto load = [&]() -> bool {
-        const auto data = ImageLoadFromFile(path, ImageFlag_JPEG);
-        if (data.data.empty()) {
-            return false;
-        }
-        image.image = nvgCreateImageRGBA(App::GetVg(), data.w, data.h, 0, data.data.data());
-        return image.image != 0;
-    };
-
-    // whatever is already on the sd card is worth a look before the network.
-    if (!image.tried_cache) {
-        image.tried_cache = true;
-        image.cached = load();
-        if (image.cached) {
-            // only a real decode is worth charging against the frame's budget.
-            budget--;
-            return image.image;
-        }
-    }
-
-    switch (image.state) {
-        case ImageState::None: {
-            image.state = ImageState::Progress;
-            const auto index = &e - m_entries.data();
-
-            // the shop gates its own artwork like its catalogue, so its copies
-            // need credentials; a hotlink points at a cdn that must not get them.
-            const auto user = src.local ? m_config.user : "";
-            const auto pass = src.local ? m_config.pass : "";
-
-            const auto queued = curl::Api().ToFileAsync(
-                curl::Url{url},
-                curl::Path{path},
-                curl::UserPass{user, pass},
-                curl::PreemptiveAuth{src.local},
-                curl::Flags{curl::Flag_Cache},
-                curl::StopToken{m_page_stop.get_token()},
-                curl::OnComplete{[this, index, banner](auto& result) {
-                    // entries never move while a page is up, and leaving one stops
-                    // the token this carries, so the index names the same title.
-                    auto& entry = m_entries[index];
-                    auto& done = banner ? entry.banner : entry.icon;
-                    done.state = result.success ? ImageState::Done : ImageState::Failed;
-                }}
-            );
-
-            if (!queued) {
-                image.state = ImageState::Failed;
-            }
-        }   break;
-
-        case ImageState::Done: {
-            if (load()) {
-                budget--;
-            } else {
-                image.state = ImageState::Failed;
-            }
-        }   break;
-
-        case ImageState::Progress:
-        case ImageState::Failed:
-            break;
-    }
-
-    return image.image;
 }
 
 void Menu::DrawDiscoverButton(NVGcontext* vg, Theme* theme) const {
@@ -599,6 +407,11 @@ void Menu::OnFocusGained() {
     // this runs back from every popup the menu pushes, so the list is not
     // reloaded here: every path that writes an entry calls ReloadSaved itself.
     if (m_did_initial_setup) {
+        // Opening a title stops the old page artwork. Rebuild it lazily when
+        // returning so no catalogue downloads overlap the detail page.
+        if (m_mode == Mode::Home && m_entries.empty() && !m_loading) {
+            LoadPage(m_page);
+        }
         return;
     }
     m_did_initial_setup = true;
@@ -890,7 +703,8 @@ auto Menu::BuildQuery(s64 page) -> sphaira::ownfoil::api::CatalogQuery {
     query.descending = m_sort_desc.Get();
     // the id lists this leaves empty are the worker's to fill, since the console
     // has to be scanned for them.
-    query.category = CATEGORIES[m_category].category;
+    const auto category = std::clamp<s64>(m_category, 0, static_cast<s64>(std::size(CATEGORIES)) - 1);
+    query.category = CATEGORIES[category].category;
     query.search = m_search;
     return query;
 }
@@ -971,6 +785,7 @@ void Menu::LoadPage(s64 page) {
     // option::Get() fills its cache on first call, so the query is built here
     // rather than on the worker.
     const auto query = BuildQuery(page);
+    const auto generation = m_catalog_generation;
     const auto config = m_config;
     const auto base_url = m_base_url;
     // the page on screen owns the fetch that would replace it, so leaving it
@@ -981,7 +796,7 @@ void Menu::LoadPage(s64 page) {
 
     // owned by the menu rather than fired and forgotten: ~Async joins, and a
     // thread can't join itself.
-    m_loader = std::make_unique<utils::Async>([this, config, base_url, query, page, token](){
+    m_loader = std::make_unique<utils::Async>([this, config, base_url, query, page, generation, token](){
         // the result travels with the event rather than through a member: no
         // dialog is holding the main thread off one this time.
         std::vector<sphaira::ownfoil::api::ShopApp> apps;
@@ -993,7 +808,14 @@ void Menu::LoadPage(s64 page) {
         }
 
         evman::push(evman::CallbackEventData{
-            [this, page, total, apps = std::move(apps), error = std::move(error)]() mutable {
+            [this, page, generation, total, apps = std::move(apps), error = std::move(error)]() mutable {
+                if (generation != m_catalog_generation) {
+                    m_loading = false;
+                    const auto next = m_pending_page.value_or(0);
+                    m_pending_page.reset();
+                    LoadPage(next);
+                    return;
+                }
                 if (!error.empty()) {
                     m_loading = false;
                     App::Notify(m_config.name + ": " + error);
@@ -1031,9 +853,6 @@ void Menu::ApplyPage(s64 page, std::vector<sphaira::ownfoil::api::ShopApp>& apps
     // a fresh page starts at the top.
     m_entry_index = 0;
     m_list->SetYoff(0);
-    m_banner_name.Reset();
-    m_banner_publisher.Reset();
-
     char subheading[64];
     std::snprintf(subheading, sizeof(subheading), "Page %ld / %ld"_i18n.c_str(),
         m_page + 1, GetPageMax());
@@ -1047,11 +866,12 @@ void Menu::SetCatalogTitle() {
     // what is shown and how much of it, beside the shop's name. what orders it is
     // left to the sidebar: the row is bounded by the status text to its right,
     // and a third part is what tips it into scrolling.
-    auto title = i18n::get(CATEGORIES[m_category].name);
+    const auto category = std::clamp<s64>(m_category, 0, static_cast<s64>(std::size(CATEGORIES)) - 1);
+    auto title = i18n::get(CATEGORIES[category].name);
 
     // "Search" alone says nothing about what is on screen, so the term shares the
     // same slot rather than taking another.
-    if (CATEGORIES[m_category].category == sphaira::ownfoil::api::Category::Search && !m_search.empty()) {
+    if (CATEGORIES[category].category == sphaira::ownfoil::api::Category::Search && !m_search.empty()) {
         title += ": " + m_search;
     }
 
@@ -1088,6 +908,7 @@ void Menu::ShowCategories() {
                 return;
             }
 
+            ++m_catalog_generation;
             m_category = i;
             SetCatalogTitle();
             // a different catalog, so there is no page of the old one to stay on.
@@ -1141,16 +962,6 @@ void Menu::ShowOptions() {
             }, true, "Forget the selected server."_i18n);
         }
     } else {
-        SidebarEntryArray::Items view_items;
-        view_items.push_back("Icon"_i18n);
-        view_items.push_back("Banner"_i18n);
-        view_items.push_back("Detail"_i18n);
-
-        options->Add<SidebarEntryArray>("View"_i18n, view_items, [this](s64& index_out){
-            m_view.Set(index_out);
-            OnViewChange();
-        }, m_view.Get(), "Change titles view. Also cycled with -."_i18n);
-
         SidebarEntryArray::Items page_items;
         s64 page_index{};
         for (size_t i = 0; i < std::size(PAGE_SIZES); i++) {
@@ -1211,7 +1022,7 @@ void Menu::ShowOptions() {
 
                 // one delete however much is cached, but still an sd write not to
                 // wait on from the main thread.
-                App::Push<ProgressBox>(0, "Clear cache"_i18n, "Nintendo eShop"_i18n, [](ProgressBox*) -> Result {
+                App::Push<ProgressBox>(0, "Clear cache"_i18n, "NS eShop"_i18n, [](ProgressBox*) -> Result {
                     const auto rc = fs::FsNativeSd().DeleteDirectoryRecursively(CACHE_PATH);
                     // nothing cached yet is already clear.
                     R_UNLESS(R_SUCCEEDED(rc) || rc == FsError_PathNotFound, rc);
@@ -1247,6 +1058,10 @@ void Menu::OpenSelected() {
     page.icon = app.icon;
     page.download = app.download;
 
+    // The detail page has its own artwork pipeline. Stop the catalogue queue
+    // before starting it so a cold cache cannot make both views download at once.
+    FreeEntries();
+    m_loader.reset();
     App::Push<TitleMenu>(m_config, m_base_url, page);
 }
 

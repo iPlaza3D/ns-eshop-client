@@ -60,8 +60,6 @@ struct MainMenu final : Widget {
     }
 
 private:
-    void OnLRPress(MenuBase* menu, Button b);
-    void AddOnLRPress();
     void CheckForUpdates(bool show_result);
     auto ParseUpdateMetadata(const fs::FsPath& path) -> bool;
     void ShowUpdateInfo();
@@ -69,8 +67,6 @@ private:
 
 private:
     std::unique_ptr<MenuBase> m_centre_menu{};
-    std::unique_ptr<MenuBase> m_left_menu{};
-    std::unique_ptr<MenuBase> m_right_menu{};
     MenuBase* m_current_menu{};
 
     std::string m_update_url{};

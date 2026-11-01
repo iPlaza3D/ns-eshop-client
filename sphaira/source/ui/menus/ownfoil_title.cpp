@@ -17,7 +17,6 @@
 #include "utils/utils.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
@@ -26,6 +25,7 @@
 
 namespace sphaira::ui::menu::ownfoil {
 namespace {
+
 
 namespace api = sphaira::ownfoil::api;
 namespace installed = sphaira::ownfoil::installed;
@@ -55,6 +55,7 @@ constexpr float THUMB_H = 53.f;
 constexpr float THUMB_GAP = 10.f;
 // as many as fit under the big image.
 constexpr s64 THUMB_COUNT = 7;
+constexpr size_t MAX_DLC_ARTWORK = 8;
 
 constexpr float SECTION_GAP = 30.f;
 constexpr float INTRO_SIZE = 24.f;
@@ -233,10 +234,12 @@ auto FetchImage(const sphaira::ownfoil::Config& config, const std::string& id, c
     // the cache is keyed on the url, and a url names its bytes, so whatever is
     // already there is the image - unless it is a download that never finished.
     if (fs::FsNativeSd().FileExists(path)) {
-        auto cached = ImageLoadFromFile(path, ImageFlag_None);
+        auto cached = ImageLoadFromFile(path, ImageFlag_Artwork);
         if (!cached.data.empty()) {
             return cached;
         }
+        // Do not retry the same corrupt or truncated cache file forever.
+        fs::FsNativeSd().DeleteFile(path);
     }
 
     // the shop gates its own copies like its catalogue; a hotlink points at a cdn
@@ -253,7 +256,7 @@ auto FetchImage(const sphaira::ownfoil::Config& config, const std::string& id, c
         return {};
     }
 
-    return ImageLoadFromFile(path, ImageFlag_None);
+    return ImageLoadFromFile(path, ImageFlag_Artwork);
 }
 
 auto CreateTexture(const ImageResult& image) -> int {
@@ -328,12 +331,13 @@ TitleMenu::TitleMenu(const sphaira::ownfoil::Config& config, const std::string& 
         // title itself moves to the main thread. the page's own banner is CLIENT,
         // the box its big image is drawn at; a card's THUMB only stands in.
         const auto banner = title.banner.url.empty() ? m_page.banner : title.banner;
-        const auto screenshots = title.screenshots;
-        const auto dlc = title.dlc;
+        const auto related = title.dlc;
 
         send([this, title = std::move(title)]() mutable {
             m_title = std::move(title);
-            m_screenshots.resize(m_title.screenshots.size());
+            // The catalogue is intentionally text-only. The detail page owns
+            // the only artwork request: the main cover shown here.
+            m_screenshots.clear();
 
             // blank lines after the text would only lengthen the page.
             auto& description = m_title.description;
@@ -360,11 +364,15 @@ TitleMenu::TitleMenu(const sphaira::ownfoil::Config& config, const std::string& 
             Layout();
         });
 
-        // ahead of the screenshots rather than beside them: fetched with them, an
-        // uncached banner took ~150ms to download and ~107ms to decode, twice what
-        // it takes alone. sent even when nothing was read, since the page waits.
+        // The detail page makes one artwork request: its main cover. It is sent
+        // even when nothing was read, since the page waits for this result.
         if (!banner.url.empty()) {
             auto image = FetchImage(m_config, m_page.id, banner, "banner", token);
+            // Some servers expose the catalogue thumbnail but not the larger
+            // CLIENT banner. Fall back to the artwork that opened the page.
+            if (image.data.empty() && banner.url != m_page.banner.url && !m_page.banner.url.empty()) {
+                image = FetchImage(m_config, m_page.id, m_page.banner, "banner", token);
+            }
             if (!image.data.empty()) {
                 log_write("[OWNFOIL] banner for %s decoded after %zums\n", m_page.id.c_str(), opened.GetMs());
             }
@@ -376,25 +384,16 @@ TitleMenu::TitleMenu(const sphaira::ownfoil::Config& config, const std::string& 
             });
         }
 
-        // in order, so the thumbnails fill in left to right. these queue behind
-        // the title above, so the slot each one lands in already exists.
-        for (size_t i = 0; i < screenshots.size() && !token.stop_requested(); i++) {
-            auto image = FetchImage(m_config, m_page.id, screenshots[i], "screenshot", token);
-            if (image.data.empty()) {
+        // Related content is the one exception to the text-only catalogue:
+        // load a small number of DLC thumbnails sequentially, after the main
+        // cover, so the detail page can fill them in without a download burst.
+        for (size_t i = 0; i < related.size() && i < MAX_DLC_ARTWORK && !token.stop_requested(); i++) {
+            const auto& content = related[i];
+            if (content.banner.url.empty()) {
                 continue;
             }
 
-            send([this, i, image = std::move(image)]() {
-                if (i < m_screenshots.size() && !m_screenshots[i]) {
-                    m_screenshots[i] = CreateTexture(image);
-                }
-            });
-        }
-
-        // last, since the rows are the furthest down the page. cached under the
-        // same name a dlc card uses, so one the catalog has shown is read back.
-        for (size_t i = 0; i < dlc.size() && !token.stop_requested(); i++) {
-            auto image = FetchImage(m_config, dlc[i].app_id, dlc[i].banner, "banner", token);
+            auto image = FetchImage(m_config, content.app_id, content.banner, "banner", token);
             if (image.data.empty()) {
                 continue;
             }
@@ -405,6 +404,7 @@ TitleMenu::TitleMenu(const sphaira::ownfoil::Config& config, const std::string& 
                 }
             });
         }
+
     });
 
     // the installed lookup mounts the game's control nca, so it runs beside the
@@ -412,28 +412,25 @@ TitleMenu::TitleMenu(const sphaira::ownfoil::Config& config, const std::string& 
     m_console = std::make_unique<utils::Async>([this, token, send, icon_for_banner](){
         LoadInstalled(token);
 
-        // a page with no banner opens on the card's icon instead, which the grid
-        // has usually fetched. sent even when nothing was read, as above.
-        if (icon_for_banner) {
-            auto icon = FetchImage(m_config, m_page.id, m_page.icon, "icon", token);
-            send([this, icon = std::move(icon)]() {
-                if (!icon.data.empty()) {
-                    m_icon = CreateTexture(icon);
-                }
-                m_artwork_done = true;
-            });
+        // Only use the icon when the title has no banner at all. This keeps the
+        // detail page to a single cover request in the normal case.
+        if (!icon_for_banner || m_page.icon.url.empty()) {
+            if (icon_for_banner && m_page.icon.url.empty()) {
+                send([this]() { m_artwork_done = true; });
+            }
             return;
         }
 
-        // a dlc names its game beside this icon, which the page doesn't wait for:
-        // it can be a download, and on the console one held a page to OPEN_WAIT_MS.
-        if (m_page.dlc) {
-            if (auto image = FetchImage(m_config, m_page.id, m_page.icon, "icon", token); !image.data.empty()) {
-                send([this, image = std::move(image)]() {
-                    m_icon = CreateTexture(image);
-                });
+        auto icon = FetchImage(m_config, m_page.id, m_page.icon, "icon", token);
+        send([this, icon = std::move(icon), icon_for_banner]() {
+            if (!icon.data.empty()) {
+                m_icon = CreateTexture(icon);
             }
-        }
+            // A page without a banner uses the icon as its main artwork.
+            if (icon_for_banner) {
+                m_artwork_done = true;
+            }
+        });
     });
 }
 
@@ -552,7 +549,9 @@ auto TitleMenu::GetImageCount() const -> s64 {
 auto TitleMenu::GetImage(s64 index) const -> int {
     if (!GetBanner().url.empty()) {
         if (index == 0) {
-            return m_banner;
+            // Keep showing the catalogue icon if the larger detail artwork is
+            // unavailable on the server.
+            return m_banner ? m_banner : m_icon;
         }
         index--;
     }

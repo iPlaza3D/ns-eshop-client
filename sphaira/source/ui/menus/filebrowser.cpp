@@ -340,8 +340,8 @@ void ShowForwarderEditor(const FileAssocEntry& assoc, const RomDatabaseIndexs& d
 
         // if this is a rom, load intro logo.
         if (has_rom_logo) {
-            fs::FsNativeSd().read_entire_file("/config/sphaira/logo/rom/NintendoLogo.png", config.logo);
-            fs::FsNativeSd().read_entire_file("/config/sphaira/logo/rom/StartupMovie.gif", config.gif);
+            fs::FsNativeSd().read_entire_file("/config/ns-eshop-client/logo/rom/NintendoLogo.png", config.logo);
+            fs::FsNativeSd().read_entire_file("/config/ns-eshop-client/logo/rom/StartupMovie.gif", config.gif);
         }
 
         // try and install.
@@ -2191,7 +2191,7 @@ void Base::LoadAssocEntries() {
             romfsExit();
         }
         // then load custom entries
-        LoadAssocEntriesPath("/config/sphaira/assoc/");
+        LoadAssocEntriesPath("/config/ns-eshop-client/assoc/");
     }
 }
 

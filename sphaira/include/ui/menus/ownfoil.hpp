@@ -23,7 +23,7 @@ struct Menu final : grid::Menu {
     Menu(u32 flags);
     ~Menu();
 
-    auto GetShortTitle() const -> const char* override { return "Ownfoil"; }
+    auto GetShortTitle() const -> const char* override { return "NS eShop"; }
     void Update(Controller* controller, TouchInfo* touch) override;
     void Draw(NVGcontext* vg, Theme* theme) override;
     void OnFocusGained() override;
@@ -34,36 +34,8 @@ private:
         Home,
     };
 
-    // all three draw the same fetched data, so cycling costs nothing.
-    enum ViewType {
-        ViewType_Icon,
-        ViewType_Banner,
-        ViewType_Detail,
-        ViewType_Count,
-    };
-
-    enum class ImageState { None, Progress, Done, Failed };
-
-    struct LazyImage {
-        LazyImage() = default;
-        LazyImage(const LazyImage&) = delete;
-        auto operator=(const LazyImage&) -> LazyImage& = delete;
-        // movable so the entry vector can grow; the moved-from half must not
-        // then delete the texture the new owner holds.
-        LazyImage(LazyImage&& rhs) noexcept;
-        auto operator=(LazyImage&& rhs) noexcept -> LazyImage&;
-        ~LazyImage();
-        int image{};
-        bool tried_cache{};
-        bool cached{};
-        ImageState state{ImageState::None};
-    };
-
-    // only the image the current view draws is ever requested.
     struct Entry {
         sphaira::ownfoil::api::ShopApp app{};
-        LazyImage icon{};
-        LazyImage banner{};
     };
 
     // one row of the server list: a saved entry, a server discovered on the
@@ -89,8 +61,6 @@ private:
     void ShowSearch(s64 index);
     // the server name and the category on screen, drawn above the grid.
     void SetCatalogTitle();
-    void OnViewChange();
-    void CycleView();
     // fetches `page` (0-based) in the background, leaving the page on screen up.
     void LoadPage(s64 page);
     void ApplyPage(s64 page, std::vector<sphaira::ownfoil::api::ShopApp>& apps, s64 total);
@@ -102,9 +72,6 @@ private:
     auto PrepareQuery(sphaira::ownfoil::api::CatalogQuery& query, const std::string& base_url, const sphaira::ownfoil::Config& config, std::stop_token token, std::string& error) -> bool;
     void DrawHome(NVGcontext* vg, Theme* theme);
     void FreeEntries();
-    // kicks off a cache read or download when there is no texture yet; `budget`
-    // caps the work done per frame.
-    auto GetImage(Entry& e, bool banner, int& budget) -> int;
     void OpenSelected();
     void EditSelected();
     auto FindAction(Button button) const -> std::optional<Action>;
@@ -120,6 +87,7 @@ private:
 
     Mode m_mode{Mode::ServerList};
     bool m_did_initial_setup{};
+    u64 m_catalog_generation{};
 
     sphaira::ownfoil::Configs m_saved{};
     std::vector<sphaira::ownfoil::discovery::DiscoveredServer> m_discovered{};
@@ -177,8 +145,6 @@ private:
     // artwork the shop serves itself is gated like the catalog, so drawing needs
     // its credentials.
     sphaira::ownfoil::Config m_config{};
-    ScrollingText m_banner_name{};
-    ScrollingText m_banner_publisher{};
     // '-' and Y belong to MainMenu while this menu is a tab; borrowed for the
     // home view and handed back on the way out.
     std::optional<Action> m_prev_select{};
@@ -188,7 +154,6 @@ private:
     s64 m_category{};
     std::string m_search{}; // not persisted either, and cleared on connect.
 
-    option::OptionLong m_view{INI_SECTION, "view", ViewType_Icon};
     option::OptionLong m_page_size{INI_SECTION, "page_size", 24};
     option::OptionLong m_sort{INI_SECTION, "sort", 0};
     option::OptionBool m_sort_desc{INI_SECTION, "sort_desc", false};

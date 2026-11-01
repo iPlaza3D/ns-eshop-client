@@ -35,6 +35,8 @@ constexpr int BPP = 4;
 constexpr int ICON_SIZE = 256;
 constexpr int ICON_MAX_DIMENSION = 1024;
 constexpr size_t ICON_MAX_PIXELS = static_cast<size_t>(ICON_MAX_DIMENSION) * ICON_MAX_DIMENSION;
+constexpr int ARTWORK_MAX_DIMENSION = 2048;
+constexpr size_t ARTWORK_MAX_PIXELS = static_cast<size_t>(ARTWORK_MAX_DIMENSION) * ARTWORK_MAX_DIMENSION;
 
 struct ImageLimits {
     int max_dimension{std::numeric_limits<int>::max()};
@@ -190,12 +192,15 @@ auto ImageLoadFromMemory(std::span<const u8> data, u32 flags) -> ImageResult {
 }
 
 auto ImageLoadFromFile(const fs::FsPath& file, u32 flags) -> ImageResult {
+    const auto limits = (flags & ImageFlag_Artwork)
+        ? ImageLimits{ARTWORK_MAX_DIMENSION, ARTWORK_MAX_PIXELS}
+        : ImageLimits{};
 #ifdef USE_NVJPG
     if (flags & ImageFlag_JPEG) {
         // don't make const as it prevents RTO.
-        auto result = ImageLoadInternal(nj::Image{file}, {});
+        auto result = ImageLoadInternal(nj::Image{file}, limits);
         // if it failed, try again but without using oss-jpg.
-        return result.data.empty() ? ImageLoadFromFile(file, 0) : result;
+        return result.data.empty() ? ImageLoadFromFile(file, flags & ~ImageFlag_JPEG) : result;
     }
     else
 #endif
@@ -207,14 +212,14 @@ auto ImageLoadFromFile(const fs::FsPath& file, u32 flags) -> ImageResult {
         }
 
         size_t decoded_size{};
-        if (!ImageDimensionsAllowed(x, y, {}, decoded_size)) {
+        if (!ImageDimensionsAllowed(x, y, limits, decoded_size)) {
             log_write("invalid image dimensions: %dx%d\n", x, y);
             return {};
         }
 
         x = y = channels = 0;
         auto image_data = stbi_load(file, &x, &y, &channels, BPP);
-        return ImageLoadInternal(image_data, x, y, {});
+        return ImageLoadInternal(image_data, x, y, limits);
     }
 }
 

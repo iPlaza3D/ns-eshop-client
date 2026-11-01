@@ -13,8 +13,8 @@ build_preset Release
 rm -rf out
 
 # --- SWITCH --- #
-mkdir -p out/switch/sphaira/
-cp -r build/Release/*.nro out/switch/sphaira/sphaira.nro
+mkdir -p out/switch/ns-eshop-client/
+cp -r build/Release/ns-eshop-client.nro out/switch/ns-eshop-client/ns-eshop-client.nro
 pushd out
-zip -r9 sphaira.zip switch
+zip -r9 ns-eshop-client.zip switch
 popd

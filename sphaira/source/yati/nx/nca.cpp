@@ -233,9 +233,7 @@ Result ParseControl(const fs::FsPath& path, u64 program_id, void* nacp_out, s64 
             // NULL on alloc failure or corrupt zlib stream, keep the raw nacp and let NormalizeNacpLangData() retry.
             if (auto* lang_entries = nxtcDecompressNacpTitleBlock(&nacp)) {
                 ON_SCOPE_EXIT(std::free(lang_entries));
-                std::memcpy(&nacp, lang_entries, sizeof(NacpLanguageEntryData));
-                // mark as decompressed so NormalizeNacpLangData() and nxtcAddEntry() don't inflate it again.
-                nacp.titles_data_format = 0;
+                std::memcpy(&nacp, lang_entries, sizeof(nacp.lang));
             } else {
                 log_write("[NACP] failed to decompress title block for %016lX\n", program_id);
             }

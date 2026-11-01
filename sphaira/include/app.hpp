@@ -9,6 +9,7 @@
 #include "fs.hpp"
 #include "log.hpp"
 #include "utils/audio.hpp"
+#include "utils/thread.hpp"
 
 #ifdef USE_NVJPG
 #include <nvjpg.hpp>
@@ -19,6 +20,7 @@
 #include <span>
 #include <optional>
 #include <utility>
+#include <atomic>
 
 namespace sphaira {
 
@@ -147,6 +149,7 @@ public:
     static void ShowEnableInstallPrompt();
 
     void Draw();
+    void DrawStartupOverlay();
     void Update();
     void Poll();
 
@@ -274,8 +277,8 @@ public:
     }
 
 // private:
-    static constexpr inline auto CONFIG_PATH = "/config/sphaira/config.ini";
-    static constexpr inline auto PLAYLOG_PATH = "/config/sphaira/playlog.ini";
+    static constexpr inline auto CONFIG_PATH = "/config/ns-eshop-client/config.ini";
+    static constexpr inline auto PLAYLOG_PATH = "/config/ns-eshop-client/playlog.ini";
     static constexpr inline auto INI_SECTION = "config";
     static constexpr inline auto DEFAULT_THEME_PATH = "romfs:/themes/default_theme.ini";
 
@@ -295,6 +298,11 @@ public:
     Vec2 m_scale{1, 1};
 
     std::vector<std::unique_ptr<ui::Widget>> m_widgets;
+    std::unique_ptr<utils::Async> m_startup_task{};
+    std::atomic<s64> m_startup_progress{};
+    std::atomic<s64> m_startup_total{1};
+    std::atomic_bool m_startup_ready{};
+    bool m_startup_finished{};
     u32 m_pop_count{};
     ui::NotifMananger m_notif_manager{};
 
@@ -319,7 +327,7 @@ public:
 
     option::OptionBool m_log_enabled{INI_SECTION, "log_enabled", false};
     option::OptionBool m_replace_hbmenu{INI_SECTION, "replace_hbmenu", false};
-    option::OptionString m_default_music{INI_SECTION, "default_music", "/config/sphaira/themes/default_music.bfstm"};
+    option::OptionString m_default_music{INI_SECTION, "default_music", "/config/ns-eshop-client/themes/default_music.bfstm"};
     option::OptionString m_theme_path{INI_SECTION, "theme", DEFAULT_THEME_PATH};
     option::OptionBool m_theme_music{INI_SECTION, "theme_music", true};
     option::OptionBool m_show_ip_addr{INI_SECTION, "show_ip_addr", true};

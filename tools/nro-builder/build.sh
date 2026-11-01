@@ -1,5 +1,5 @@
 #!/bin/sh
-# builds sphaira.nro in the builder image, without devkitPro installed on the
+# builds ns-eshop-client.nro in the builder image, without devkitPro installed on the
 # host. --send hands the result to the console over nxlink and stays attached
 # to its log.
 #
@@ -73,7 +73,7 @@ if ! in_image "$compile"; then
     in_image "$configure=ON > /dev/null"
 fi
 
-nro="$root/build/$preset/sphaira.nro"
+nro="$root/build/$preset/ns-eshop-client.nro"
 echo "built $nro"
 
 if [ -n "$send" ]; then

@@ -10,7 +10,10 @@
             "name": "core",
             "displayName": "core",
             "hidden": true,
-            "binaryDir": "${sourceDir}/build/${presetName}"
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_DEPENDS_USE_COMPILER": false
+            }
         },
         {
             "name": "Release",
@@ -18,7 +21,9 @@
             "inherits":["core"],
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "MinSizeRel",
-                "LTO": true
+                "LTO": true,
+                "ENABLE_FTPSRV": false,
+                "ENABLE_LIBHAZE": false
             }
         },
         {
@@ -59,7 +64,9 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "MinSizeRel",
                 "LTO": false,
-                "DEV_BUILD": true
+                "DEV_BUILD": true,
+                "ENABLE_FTPSRV": false,
+                "ENABLE_LIBHAZE": false
             }
         }
     ],

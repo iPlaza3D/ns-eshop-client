@@ -10,10 +10,6 @@ Please use the [issues tab](https://github.com/iPlaza3D/ns-eshop-client/issues) 
 
 |                          |                          |
 :-------------------------:|:-------------------------:
-![Img](assets/screenshots/homebrew.jpg) | ![Img](assets/screenshots/games.jpg)
-![Img](assets/screenshots/appstore.jpg) | ![Img](assets/screenshots/appstore_page.jpg)
-![Img](assets/screenshots/file_browser.jpg) | ![Img](assets/screenshots/launch_options.jpg)
-![Img](assets/screenshots/themezer.jpg) | ![Img](assets/screenshots/web.jpg)
 ![Img](assets/screenshots/ownfoil_main.jpg) | ![Img](assets/screenshots/ownfoil_details.jpg)
 
 ## Bug reports
@@ -27,69 +23,18 @@ Please include:
 - FW version;
 - The bug itself and how to reproduce it.
 
-## FTP
-
-FTP can be enabled via the network menu. It uses the same config as ftpsrv `/config/ftpsrv/config.ini`. [See here for the full list
-of all configs available](https://github.com/ITotalJustice/ftpsrv/blob/master/assets/config.ini.template).
-
-## MTP
-
-MTP can be enabled via the Network menu.
-
-## File association
-
-NS eShop Client has file association support. Let's say your app supports loading .png files, then you could write an association file, then when using the file browser, clicking on a .png file will launch your app along with the .png file as argv[1]. This was primarly added for rom loading support for emulators / frontends such as RetroArch, MelonDS, mGBA etc.
-
-```ini
-path=/switch/your_app.nro
-supported_extensions=jpg|png|mp4|mp3
-```
-
-The `path` field is optional. If left out, it will use the name of the ini to find the nro. For example, if the ini is called mgba.ini, it will try to find the nro in /switch/mgba.nro and /switch/folder/mgba.nro.
-
-See `assets/romfs/assoc/` for more examples of file assoc entries.
-
-## Installing (applications)
-
-NS eShop Client can install applications and mod packages (nsp, xci, nsz, xcz, msp) from various sources (sd card, gamecard, ftp, usb).
-
-For information about the install options, [see the project wiki](https://github.com/iPlaza3D/ns-eshop-client/wiki).
-
-### Usb (install)
-
-The USB protocol is the same as tinfoil, so tools such as [ns-usbloader](https://github.com/developersu/ns-usbloader) and [fluffy](https://github.com/fourminute/Fluffy) should work with NS eShop Client. You may also use the provided python script found [here](tools/usb_install_pc.py).
-
-### Ftp (install)
-
-Once you have connected your ftp client to your switch, you can upload files to install into the `install` folder.
-
-### Usb HDD (install)
-
-Connected USB mass storage devices show up in the file browser (and as a dump location) under `mounts:/`,
-installing from them works the same as installing from the sd card.
-
-Supported filesystems are FAT12/16/32, exFAT and NTFS. NTFS is provided by
-[NTFS-3G](https://github.com/tuxera/ntfs-3g) and can be turned off at build time with `-DENABLE_NTFS=OFF`.
-EXT2/3/4 is supported as well but off by default, enable it with `-DENABLE_EXT4=ON`.
-
-A few NTFS notes:
-
-- Always eject the drive properly on Windows. If the journal is left dirty, the client replays it on mount, but only
-  when `HDD write protect` is off.
-- A drive left behind by Windows fast startup / hibernation is not mounted by default. `Mount hibernated NTFS`
-  in the HDD options forces it, at the cost of the saved Windows session.
-- NTFS is noticeably slower than exFAT. For installing large files, exFAT is the better choice.
-
 ### NS eShop server (install)
 
 [iplaza3d/ns-eshop-server](https://github.com/iplaza3d/ns-eshop-server) provides the self-hosted Nintendo Switch library manager used by this experimental client. It exposes the GraphQL catalog, artwork and downloadable content needed by the console client.
 
-Local servers are found automatically on the network, so there is no ip or port to type in. Each server can have both a local and a remote address, over http or https, and signs in with a user account.
+Local servers are found automatically on the network, so there is no IP or port to type in. You can also add a server manually and configure both a local and a remote address over HTTP or HTTPS.
 
 The library is browsed by *content*, not by files: pick a game, a version and the dlc you want, and the client works out which files it needs, however they are bundled (several nsp, or a multi content nsp / xci).  
-Only what you picked is downloaded and installed. nsp, nsz, xci and xcz are supported, and a download survives a broken connection, resuming for up to 60s.
+Only what you picked is downloaded and installed. NSP, NSZ, XCI and XCZ are supported, and a download survives a broken connection, resuming for up to 60 seconds.
 
-Entries are listed under `New games`, `Updates`, `DLC`, `All games` and `Search`, paginated and sortable. All artwork is served by the configured server, so the Switch never connects to Nintendo's servers.  
+Entries are listed under `New games`, `Updates`, `DLC`, `All games` and `Search`, paginated and sortable. All artwork is served by the configured server, so the Switch never connects to Nintendo's servers.
+
+The Switch client only exposes the NS eShop server workflow: select a saved or discovered server, browse its catalog, inspect a title and install the selected content.
 
 ## Building from source
 
@@ -97,11 +42,8 @@ You will first need to install [devkitPro](https://devkitpro.org/wiki/Getting_St
 
 Next you will need to install the dependencies:
 ```sh
-sudo pacman -S switch-dev deko3d switch-cmake switch-curl switch-glm switch-zlib switch-mbedtls switch-ntfs-3g
+sudo pacman -S switch-dev deko3d switch-cmake switch-curl switch-glm switch-zlib switch-mbedtls
 ```
-
-`switch-ntfs-3g` is only needed for NTFS support on USB HDDs, configure with `-DENABLE_NTFS=OFF` to build without it.
-For EXT2/3/4 support (`-DENABLE_EXT4=ON`) you also need `switch-lwext4`.
 
 Also you need to have on your environment the packages `git`, `make`, `zip` and `cmake`
 
@@ -110,11 +52,19 @@ Once devkitPro and all dependencies are installed, you can now build NS eShop Cl
 ```sh
 git clone https://github.com/iPlaza3D/ns-eshop-client.git
 cd ns-eshop-client
-cmake --preset MinSizeRel
-cmake --build --preset MinSizeRel
+cmake --preset Release
+cmake --build --preset Release
 ```
 
-The output will be found in `build/MinSizeRel/sphaira.nro`. The internal filename remains `sphaira.nro` for compatibility with the existing Switch homebrew tooling.
+The output will be found in `build/Release/ns-eshop-client.nro`, and the release package installs it under `/switch/ns-eshop-client/`.
+
+The client keeps its own data on the SD card and does not require the original Sphaira application:
+
+- Application: `/switch/ns-eshop-client/ns-eshop-client.nro`
+- Server list and settings: `/config/ns-eshop-client/`
+- Artwork and download cache: `/switch/ns-eshop-client/cache/`
+
+If you used an earlier build, its old `/config/sphaira/` server list is not imported automatically; add the server again from the client.
 
 ### Using Docker
 
@@ -129,7 +79,7 @@ The first build takes longer but after that only what you changed is compiled.
 
 `Release` is the default and is what the release workflow publishes. `Dev` skips LTO, so a one file change is immediate.
 
-The output will be found in `build/<preset>/sphaira.nro`. Add `--send` to send it straight to the console over `nxlink` (enable it in the Network options) and follow its log.
+The output will be found in `build/<preset>/ns-eshop-client.nro`. Add `--send` to send it straight to the console over `nxlink` and follow its log.
 
 ## Credits
 

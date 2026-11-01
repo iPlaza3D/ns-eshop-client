@@ -502,6 +502,7 @@ void LoadThemeInternal(ThemeMeta meta, ThemeData& theme_data, int inherit_level 
             log_write("opened ini: %s\n", meta.ini_path.s);
         }
     }
+
 }
 
 void nxlink_callback(const NxlinkCallbackData *data) {
@@ -1087,11 +1088,11 @@ auto App::Install(ui::ProgressBox* pbox, OwoConfig& config) -> Result {
     config.icon = GetNroIcon(config.icon);
 
     if (config.logo.empty()) {
-        g_app->m_fs->read_entire_file("/config/sphaira/logo/NintendoLogo.png", config.logo);
+        g_app->m_fs->read_entire_file("/config/ns-eshop-client/logo/NintendoLogo.png", config.logo);
     }
 
     if (config.gif.empty()) {
-        g_app->m_fs->read_entire_file("/config/sphaira/logo/StartupMovie.gif", config.gif);
+        g_app->m_fs->read_entire_file("/config/ns-eshop-client/logo/StartupMovie.gif", config.gif);
     }
 
     return install_forwarder(pbox, config, GetInstallSdEnable() ? NcmStorageId_SdCard : NcmStorageId_BuiltInUser);
@@ -1233,6 +1234,15 @@ void App::Poll() {
 }
 
 void App::Update() {
+    if (!m_startup_finished) {
+        if (m_startup_ready.load()) {
+            m_startup_finished = true;
+            m_startup_task.reset();
+        } else {
+            return;
+        }
+    }
+
     // loop background music if it has finished.
     audio::State song_state;
     if (R_SUCCEEDED(audio::GetProgress(m_background_music, nullptr, &song_state))) {
@@ -1311,11 +1321,38 @@ void App::Draw() {
         }
     }
 
+    if (!m_startup_finished) {
+        this->DrawStartupOverlay();
+    }
+
     m_notif_manager.Draw(vg, &m_theme);
 
     nvgResetTransform(vg);
     nvgEndFrame(this->vg);
     this->queue.presentImage(this->swapchain, slot);
+}
+
+void App::DrawStartupOverlay() {
+    const auto total = std::max<s64>(1, m_startup_total.load());
+    const auto progress = std::clamp<s64>(m_startup_progress.load(), 0, total);
+    const auto fraction = static_cast<float>(progress) / static_cast<float>(total);
+
+    ui::gfx::drawRect(vg, 0.f, 0.f, SCREEN_WIDTH, SCREEN_HEIGHT, m_theme.GetColour(ThemeEntryID_BACKGROUND));
+    ui::gfx::drawTextArgs(vg, SCREEN_WIDTH / 2.f, 300.f, 42.f,
+        NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, m_theme.GetColour(ThemeEntryID_TEXT),
+        "NS Personal eShop");
+    ui::gfx::drawTextArgs(vg, SCREEN_WIDTH / 2.f, 360.f, 18.f,
+        NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, m_theme.GetColour(ThemeEntryID_TEXT_INFO),
+        "Loading local artwork cache..."_i18n.c_str());
+
+    constexpr float bar_x = 220.f;
+    constexpr float bar_y = 650.f;
+    constexpr float bar_w = SCREEN_WIDTH - bar_x * 2.f;
+    ui::gfx::drawRect(vg, bar_x, bar_y, bar_w, 12.f, m_theme.GetColour(ThemeEntryID_PROGRESSBAR_BACKGROUND), 6.f);
+    ui::gfx::drawRect(vg, bar_x, bar_y, bar_w * fraction, 12.f, m_theme.GetColour(ThemeEntryID_PROGRESSBAR), 6.f);
+    ui::gfx::drawTextArgs(vg, SCREEN_WIDTH / 2.f, bar_y - 18.f, 16.f,
+        NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM, m_theme.GetColour(ThemeEntryID_TEXT_INFO),
+        "%ld%%", static_cast<long>(fraction * 100.f));
 }
 
 auto App::GetApp() -> App* {
@@ -1561,7 +1598,7 @@ void App::ScanThemeEntries() {
     }
 
     // then load custom entries
-    ScanThemes("/config/sphaira/themes/");
+    ScanThemes("/config/ns-eshop-client/themes/");
 }
 
 void App::LoadAndPlayThemeMusic() {
@@ -1573,7 +1610,7 @@ void App::LoadAndPlayThemeMusic() {
 }
 
 Result App::SetDefaultBackgroundMusic(fs::Fs* fs, const fs::FsPath& path) {
-    constexpr const char* base_path = "/config/sphaira/themes/default_music.";
+    constexpr const char* base_path = "/config/ns-eshop-client/themes/default_music.";
 
     const auto ext = std::strrchr(path, '.');
     R_UNLESS(ext, 0x1);
@@ -1769,12 +1806,12 @@ App::App(const char* argv0) {
 
         {
             SCOPED_TIMESTAMP("config directory init");
-            m_fs->CreateDirectoryRecursively("/config/sphaira");
-            m_fs->CreateDirectory("/config/sphaira/assoc");
-            m_fs->CreateDirectory("/config/sphaira/themes");
-            m_fs->CreateDirectory("/config/sphaira/github");
-            m_fs->CreateDirectory("/config/sphaira/i18n");
-            m_fs->CreateDirectory("/config/sphaira/mount");
+            m_fs->CreateDirectoryRecursively("/config/ns-eshop-client");
+            m_fs->CreateDirectory("/config/ns-eshop-client/assoc");
+            m_fs->CreateDirectory("/config/ns-eshop-client/themes");
+            m_fs->CreateDirectory("/config/ns-eshop-client/github");
+            m_fs->CreateDirectory("/config/ns-eshop-client/i18n");
+            m_fs->CreateDirectory("/config/ns-eshop-client/mount");
 
             if (!ini_haskey("steamgriddb", "api_key", CONFIG_PATH)) {
                 ini_puts("steamgriddb", "api_key", "", CONFIG_PATH);
@@ -1784,8 +1821,8 @@ App::App(const char* argv0) {
         {
             // delete old cached folders/files on startup.
             SCOPED_TIMESTAMP("old cache delete");
-            m_fs->DeleteDirectoryRecursively("/switch/sphaira/cache/themezer"); // themezer icon/json cache.
-            m_fs->DeleteFile("/switch/sphaira/cache/cache.json"); // old etag cache.
+            m_fs->DeleteDirectoryRecursively("/switch/ns-eshop-client/cache/themezer"); // themezer icon/json cache.
+            m_fs->DeleteFile("/switch/ns-eshop-client/cache/cache.json"); // old etag cache.
         }
 
         if (log_is_init()) {
@@ -2121,6 +2158,34 @@ App::App(const char* argv0) {
             }
         }
     }
+
+    // Keep the first frame calm while the client prepares its own artwork
+    // cache. Network artwork remains lazy after a server is selected.
+    m_startup_task = std::make_unique<utils::Async>([this]() {
+        constexpr fs::FsPath cache_path{"/switch/ns-eshop-client/cache/ownfoil"};
+        m_fs->CreateDirectoryRecursively(cache_path);
+
+        std::vector<FsDirectoryEntry> entries;
+        fs::Dir dir;
+        if (R_SUCCEEDED(m_fs->OpenDirectory(cache_path, FsDirOpenMode_ReadFiles | FsDirOpenMode_NoFileSize, &dir))) {
+            dir.ReadAll(entries);
+        }
+
+        const auto total = std::max<s64>(1, static_cast<s64>(entries.size()));
+        m_startup_total.store(total);
+        m_startup_progress.store(0);
+        for (s64 i = 0; i < static_cast<s64>(entries.size()); i++) {
+            svcSleepThread(1'000'000);
+            m_startup_progress.store(i + 1);
+        }
+        if (entries.empty()) {
+            m_startup_progress.store(1);
+        }
+        m_startup_ready.store(true);
+    });
+    if (!m_startup_task->IsRunning()) {
+        m_startup_ready.store(true);
+    }
 }
 
 void App::PlaySoundEffect(SoundEffect effect) {
@@ -2249,7 +2314,7 @@ void App::DisplayAdvancedOptions(bool left_side) {
 
     options->Add<ui::SidebarEntryBool>("Logging"_i18n, App::GetLogEnable(), [](bool& enable){
         App::SetLogEnable(enable);
-    }, "Logs to /config/sphaira/log.txt"_i18n);
+    }, "Logs to /config/ns-eshop-client/log.txt"_i18n);
 
     options->Add<ui::SidebarEntryBool>("Replace hbmenu on exit"_i18n, App::GetReplaceHbmenuEnable(), [](bool& enable){
         App::SetReplaceHbmenuEnable(enable);

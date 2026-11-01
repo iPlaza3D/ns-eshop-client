@@ -1,6 +1,17 @@
 cmake_minimum_required(VERSION 3.13)
 
-if (NOT DEFINED ENV{DEVKITPRO})
+if (DEFINED ENV{DEVKITPRO})
+    string(REPLACE "\\" "/" _devkitpro "$ENV{DEVKITPRO}")
+    if (NOT WIN32 AND _devkitpro MATCHES "^[A-Za-z]:/")
+        string(SUBSTRING "${_devkitpro}" 0 1 _devkitpro_drive)
+        string(SUBSTRING "${_devkitpro}" 2 -1 _devkitpro_rest)
+        string(TOLOWER "${_devkitpro_drive}" _devkitpro_drive)
+        set(_devkitpro "/${_devkitpro_drive}/${_devkitpro_rest}")
+    endif()
+    set(ENV{DEVKITPRO} "${_devkitpro}")
+elseif (WIN32 AND EXISTS "C:/devkitPro/cmake/Switch.cmake")
+    set(ENV{DEVKITPRO} "C:/devkitPro")
+else()
     message(FATAL_ERROR "DEVKITPRO is not defined!")
 endif()
 
